@@ -1,9 +1,10 @@
-﻿uploads/
+﻿# Runtime data (student records live here - never commit)
+uploads/
 outputs/
+
+# Build artifacts
 dist/
 build/
-__pycache__/
-*.pyc
 *.exe
 *.pkg
 *.toc
@@ -11,7 +12,14 @@ __pycache__/
 base_library.zip
 warn-*.txt
 xref-*.html
+
+# Python
+__pycache__/
+*.pyc
 .venv/
+.pytest_cache/
+
+# Data / document files: ignored everywhere except synthetic fixtures under tests/
 *.docx
 *.xlsx
 *.csv
