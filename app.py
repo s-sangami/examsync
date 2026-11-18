@@ -120,42 +120,77 @@ def get_department(reg_no): return parse_reg_no(reg_no)[0]
 def get_year(reg_no):       return parse_reg_no(reg_no)[1]
 
 
+ABSENT_MARKS = ("AB", "A", "ABSENT", "✖", "X")
+# Cell texts that are attendance statuses, never student names
+NON_NAME_WORDS = {"P", "PR", "PRESENT", "ABSENT", "AB", "A", "X"}
+
+# Register number: 4-digit college code + 2-digit admission year + dept code + serial.
+# e.g. 610823U104001. Pure-digit numbers must be 12+ digits (year-22 style) so
+# that 10-digit answer-book numbers are not mistaken for register numbers.
+REG_NO_RE = re.compile(r"^\d{6}[A-Z0-9]{4,10}$")
+# Letters, spaces, dots (initials), hyphens, apostrophes; at least 2 letters.
+NAME_RE = re.compile(r"^[A-Za-z][A-Za-z .'\-]*$")
+
+
+def normalize_reg_no(text):
+    return re.sub(r"\s+", "", text).upper()
+
+
+def looks_like_reg_no(text):
+    t = normalize_reg_no(text)
+    if not REG_NO_RE.match(t):
+        return False
+    return not (t.isdigit() and len(t) < 12)
+
+
+def looks_like_name(text):
+    t = text.strip()
+    return (NAME_RE.match(t) is not None
+            and sum(ch.isalpha() for ch in t) >= 2
+            and t.upper() not in NON_NAME_WORDS)
+
+
 def extract_absentees(filepath):
     doc = Document(filepath)
-    absentees   = []
+    found       = {}          # reg no -> record (de-duplicates, keeps first-seen order)
     table_count = 0
 
     for table in doc.tables:
         table_count += 1
-        for i, row in enumerate(table.rows):
-            if i == 0:
+        for row in table.rows:
+            texts = [c.text.strip() for c in row.cells]
+            if len(texts) < 3:
                 continue
-            cells = row.cells
-            if len(cells) < 3:
+            # A header row has no register-number-like cell, so it falls out
+            # here; a table with no header row keeps its first data row.
+            if not any(looks_like_reg_no(t) for t in texts):
                 continue
 
-            texts  = [c.text.strip() for c in cells]
             reg_no = name = status = ""
-
             for t in texts:
-                if len(t) >= 10 and any(ch.isdigit() for ch in t) and any(ch.isalpha() for ch in t):
+                if looks_like_reg_no(t):
                     if not reg_no:
-                        reg_no = t
-                elif t.upper() in ("AB", "A", "ABSENT", "✖", "X"):
+                        reg_no = normalize_reg_no(t)
+                elif t.upper() in ABSENT_MARKS:
                     status = "AB"
-                elif len(t) > 2 and t.replace(" ", "").isalpha():
+                elif looks_like_name(t):
                     if not name:
                         name = t
 
-            if status and reg_no:
-                absentees.append({
+            if not (status and reg_no):
+                continue
+            rec = found.get(reg_no)
+            if rec is None:
+                found[reg_no] = {
                     "Reg No":     reg_no,
                     "Name":       name or "—",
                     "Department": get_department(reg_no),
                     "Year":       get_year(reg_no),
-                })
+                }
+            elif rec["Name"] == "—" and name:
+                rec["Name"] = name
 
-    return absentees, table_count
+    return list(found.values()), table_count
 
 
 @app.route("/")
@@ -167,7 +202,7 @@ def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files["file"]
-    if not file.filename.endswith(".docx"):
+    if not file.filename.lower().endswith(".docx"):
         return jsonify({"error": "Please upload a .docx file"}), 400
 
     filepath = os.path.join(UPLOAD_FOLDER, "attendance.docx")
