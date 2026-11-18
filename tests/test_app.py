@@ -100,7 +100,7 @@ def test_header_row_is_not_treated_as_a_student(tmp_path):
 
 
 @pytest.mark.parametrize("name", [
-    "R. Kumar", "S.K. Devi", "A. B. C. Nair", "Mary-Anne Joseph", "K S Priya", "D'Souza Rita",
+    "R. Kumar", "S. KUMAR", "R.SANGAMI", "S.K. Devi", "A. B. C. Nair", "Mary-Anne Joseph", "K S Priya", "D'Souza Rita",
 ])
 def test_names_with_initials_dots_and_hyphens(tmp_path, name):
     path = make_docx(tmp_path / "a.docx", [[
