@@ -4,14 +4,8 @@ import threading
 import time
 import socket
 
-# ── PyInstaller path fix ──────────────────────────────────────────────────────
-def resource_path(relative):
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, relative)
-    return os.path.join(os.path.abspath("."), relative)
-
-if getattr(sys, 'frozen', False):
-    os.chdir(os.path.dirname(sys.executable))
+# Note: uploads/outputs are stored by app.py (%LOCALAPPDATA%\ExamSync when
+# frozen), so the working directory no longer matters.
 
 # ── Find a free port ──────────────────────────────────────────────────────────
 def find_free_port():

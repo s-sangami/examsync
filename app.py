@@ -4,20 +4,28 @@ import os
 # ── PyInstaller path fix ──────────────────────────────────────────────────────
 # When frozen as .exe, files are unpacked to a temp _MEIPASS folder.
 # This function finds the correct path in both .py and .exe modes.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def resource_path(relative):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative)
-    return os.path.join(os.path.abspath("."), relative)
+    return os.path.join(BASE_DIR, relative)
 
-# When running as exe, set working dir to folder where exe lives
-# so uploads/ and outputs/ are created next to the exe (not in temp folder)
-if getattr(sys, 'frozen', False):
-    os.chdir(os.path.dirname(sys.executable))
+# Where uploads/outputs live. As an exe: %LOCALAPPDATA%\ExamSync (a per-user,
+# writable location - not next to the exe, which may be on a read-only drive or
+# in Program Files). From source: next to app.py.
+def data_dir():
+    if getattr(sys, 'frozen', False):
+        root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(root, "ExamSync")
+    return BASE_DIR
 
 from flask import Flask, render_template, request, send_file, jsonify
 from docx import Document
 import pandas as pd
 import re
+import datetime
+import tempfile
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -26,8 +34,8 @@ from reportlab.lib.pagesizes import A4
 # Tell Flask where the templates folder is (important for exe)
 app = Flask(__name__, template_folder=resource_path("templates"))
 
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "outputs"
+UPLOAD_FOLDER = os.path.join(data_dir(), "uploads")
+OUTPUT_FOLDER = os.path.join(data_dir(), "outputs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -36,13 +44,10 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 # ▼▼▼  EDIT THIS SECTION ONLY  ▼▼▼
 # ==============================================================================
 
-YEAR_MAP = {
-    "22": "4th Year",
-    "23": "3rd Year",
-    "24": "2nd Year",
-    "25": "1st Year",
-}
-
+# Year of study is computed from the admission-year code in the register number
+# (see year_label_for), so there is no per-year table to maintain.
+# Length of the dept code that follows the admission year, by admission year.
+# Admission years not listed here default to 3 characters.
 YEAR_SLICE = {
     "22": 3,
     "23": 4,
@@ -103,11 +108,38 @@ DEPT_MAP = {
 # ==============================================================================
 
 
-def parse_reg_no(reg_no):
+ACADEMIC_YEAR_START_MONTH = 6   # academic year begins in June
+MAX_YEAR_OF_STUDY         = 4   # UG programmes; anything beyond is shown as a batch
+
+
+def current_academic_year_start(today=None):
+    """Calendar year in which the current academic year began (June start)."""
+    today = today or datetime.date.today()
+    return today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
+
+
+def year_label_for(yr, today=None):
+    """Year-of-study label from the 2-digit admission-year code.
+
+    Assumes admission in June of 20<yr> with no gap years, so in the academic
+    year starting in Y the batch is in year (Y - 20yy + 1). Fallback when the
+    code is non-numeric or the result is outside 1..MAX_YEAR_OF_STUDY (arrears
+    batches, future codes): "Batch 20yy" / "Year(yr)" instead of a wrong year.
+    """
+    if not (len(yr) == 2 and yr.isdigit()):
+        return f"Year({yr})"
+    n = current_academic_year_start(today) - (2000 + int(yr)) + 1
+    if 1 <= n <= MAX_YEAR_OF_STUDY:
+        suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix} Year"
+    return f"Batch 20{yr}"
+
+
+def parse_reg_no(reg_no, today=None):
     reg_no = reg_no.strip()
     try:
         yr         = reg_no[4:6]
-        year_label = YEAR_MAP.get(yr, f"Year({yr})")
+        year_label = year_label_for(yr, today)
         suffix     = reg_no[6:]
         n          = YEAR_SLICE.get(yr, 3)
         code       = suffix[0:n].upper()
@@ -120,42 +152,77 @@ def get_department(reg_no): return parse_reg_no(reg_no)[0]
 def get_year(reg_no):       return parse_reg_no(reg_no)[1]
 
 
+ABSENT_MARKS = ("AB", "A", "ABSENT", "✖", "X")
+# Cell texts that are attendance statuses, never student names
+NON_NAME_WORDS = {"P", "PR", "PRESENT", "ABSENT", "AB", "A", "X"}
+
+# Register number: 4-digit college code + 2-digit admission year + dept code + serial.
+# e.g. 610823U104001. Pure-digit numbers must be 12+ digits (year-22 style) so
+# that 10-digit answer-book numbers are not mistaken for register numbers.
+REG_NO_RE = re.compile(r"^\d{6}[A-Z0-9]{4,10}$")
+# Letters, spaces, dots (initials), hyphens, apostrophes; at least 2 letters.
+NAME_RE = re.compile(r"^[A-Za-z][A-Za-z .'\-]*$")
+
+
+def normalize_reg_no(text):
+    return re.sub(r"\s+", "", text).upper()
+
+
+def looks_like_reg_no(text):
+    t = normalize_reg_no(text)
+    if not REG_NO_RE.match(t):
+        return False
+    return not (t.isdigit() and len(t) < 12)
+
+
+def looks_like_name(text):
+    t = text.strip()
+    return (NAME_RE.match(t) is not None
+            and sum(ch.isalpha() for ch in t) >= 2
+            and t.upper() not in NON_NAME_WORDS)
+
+
 def extract_absentees(filepath):
     doc = Document(filepath)
-    absentees   = []
+    found       = {}          # reg no -> record (de-duplicates, keeps first-seen order)
     table_count = 0
 
     for table in doc.tables:
         table_count += 1
-        for i, row in enumerate(table.rows):
-            if i == 0:
+        for row in table.rows:
+            texts = [c.text.strip() for c in row.cells]
+            if len(texts) < 3:
                 continue
-            cells = row.cells
-            if len(cells) < 3:
+            # A header row has no register-number-like cell, so it falls out
+            # here; a table with no header row keeps its first data row.
+            if not any(looks_like_reg_no(t) for t in texts):
                 continue
 
-            texts  = [c.text.strip() for c in cells]
             reg_no = name = status = ""
-
             for t in texts:
-                if len(t) >= 10 and any(ch.isdigit() for ch in t) and any(ch.isalpha() for ch in t):
+                if looks_like_reg_no(t):
                     if not reg_no:
-                        reg_no = t
-                elif t.upper() in ("AB", "A", "ABSENT", "✖", "X"):
+                        reg_no = normalize_reg_no(t)
+                elif t.upper() in ABSENT_MARKS:
                     status = "AB"
-                elif len(t) > 2 and t.replace(" ", "").isalpha():
+                elif looks_like_name(t):
                     if not name:
                         name = t
 
-            if status and reg_no:
-                absentees.append({
+            if not (status and reg_no):
+                continue
+            rec = found.get(reg_no)
+            if rec is None:
+                found[reg_no] = {
                     "Reg No":     reg_no,
                     "Name":       name or "—",
                     "Department": get_department(reg_no),
                     "Year":       get_year(reg_no),
-                })
+                }
+            elif rec["Name"] == "—" and name:
+                rec["Name"] = name
 
-    return absentees, table_count
+    return list(found.values()), table_count
 
 
 @app.route("/")
@@ -167,16 +234,24 @@ def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
     file = request.files["file"]
-    if not file.filename.endswith(".docx"):
+    if not file.filename.lower().endswith(".docx"):
         return jsonify({"error": "Please upload a .docx file"}), 400
 
-    filepath = os.path.join(UPLOAD_FOLDER, "attendance.docx")
-    file.save(filepath)
-
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    fd, filepath = tempfile.mkstemp(suffix=".docx", dir=UPLOAD_FOLDER)
+    os.close(fd)
     try:
+        file.save(filepath)
         absentees, table_count = extract_absentees(filepath)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        # The upload holds student data; keep only the extracted outputs.
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
 
     if not absentees:
         return jsonify({"error": "No absentees found. Check AB column or file format."}), 404
@@ -186,8 +261,12 @@ def upload():
     df.to_csv(os.path.join(OUTPUT_FOLDER,   "absentees.csv"),  index=False)
 
     summary = df.groupby("Department").size().reset_index(name="Count")
+    unknown = [r["Reg No"] for r in df.to_dict(orient="records")
+               if r["Department"].startswith("UNKNOWN")]
     return jsonify({
         "total":   len(absentees),
+        "unknown_count":    len(unknown),
+        "unknown_reg_nos":  unknown,
         "tables":  table_count,
         "summary": summary.to_dict(orient="records"),
         "records": df.to_dict(orient="records"),
