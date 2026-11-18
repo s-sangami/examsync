@@ -261,8 +261,12 @@ def upload():
     df.to_csv(os.path.join(OUTPUT_FOLDER,   "absentees.csv"),  index=False)
 
     summary = df.groupby("Department").size().reset_index(name="Count")
+    unknown = [r["Reg No"] for r in df.to_dict(orient="records")
+               if r["Department"].startswith("UNKNOWN")]
     return jsonify({
         "total":   len(absentees),
+        "unknown_count":    len(unknown),
+        "unknown_reg_nos":  unknown,
         "tables":  table_count,
         "summary": summary.to_dict(orient="records"),
         "records": df.to_dict(orient="records"),
