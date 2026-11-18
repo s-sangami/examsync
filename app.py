@@ -4,21 +4,28 @@ import os
 # ── PyInstaller path fix ──────────────────────────────────────────────────────
 # When frozen as .exe, files are unpacked to a temp _MEIPASS folder.
 # This function finds the correct path in both .py and .exe modes.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def resource_path(relative):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative)
-    return os.path.join(os.path.abspath("."), relative)
+    return os.path.join(BASE_DIR, relative)
 
-# When running as exe, set working dir to folder where exe lives
-# so uploads/ and outputs/ are created next to the exe (not in temp folder)
-if getattr(sys, 'frozen', False):
-    os.chdir(os.path.dirname(sys.executable))
+# Where uploads/outputs live. As an exe: %LOCALAPPDATA%\ExamSync (a per-user,
+# writable location - not next to the exe, which may be on a read-only drive or
+# in Program Files). From source: next to app.py.
+def data_dir():
+    if getattr(sys, 'frozen', False):
+        root = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
+        return os.path.join(root, "ExamSync")
+    return BASE_DIR
 
 from flask import Flask, render_template, request, send_file, jsonify
 from docx import Document
 import pandas as pd
 import re
 import datetime
+import tempfile
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -27,8 +34,8 @@ from reportlab.lib.pagesizes import A4
 # Tell Flask where the templates folder is (important for exe)
 app = Flask(__name__, template_folder=resource_path("templates"))
 
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "outputs"
+UPLOAD_FOLDER = os.path.join(data_dir(), "uploads")
+OUTPUT_FOLDER = os.path.join(data_dir(), "outputs")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
@@ -230,13 +237,21 @@ def upload():
     if not file.filename.lower().endswith(".docx"):
         return jsonify({"error": "Please upload a .docx file"}), 400
 
-    filepath = os.path.join(UPLOAD_FOLDER, "attendance.docx")
-    file.save(filepath)
-
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    fd, filepath = tempfile.mkstemp(suffix=".docx", dir=UPLOAD_FOLDER)
+    os.close(fd)
     try:
+        file.save(filepath)
         absentees, table_count = extract_absentees(filepath)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        # The upload holds student data; keep only the extracted outputs.
+        try:
+            os.remove(filepath)
+        except OSError:
+            pass
 
     if not absentees:
         return jsonify({"error": "No absentees found. Check AB column or file format."}), 404
