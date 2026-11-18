@@ -25,3 +25,7 @@ __pycache__/
 *.csv
 *.pdf
 !tests/**
+
+# Caches inside tests/ (re-ignored after the !tests/** exception above)
+tests/**/__pycache__/
+tests/**/*.pyc
