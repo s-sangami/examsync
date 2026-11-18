@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ExamSync — Attendance Management</title>
+  <style>
+    /* ── RESET ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── DESIGN TOKENS ── */
+    :root {
+      --c-navy:       #0a1628;
+      --c-navy2:      #112240;
+      --c-navy3:      #1d3461;
+      --c-blue:       #1e6bde;
+      --c-blue-h:     #1558c0;
+      --c-blue-lt:    #e8f0fd;
+      --c-green:      #0d7a55;
+      --c-green-lt:   #e6f5ef;
+      --c-red:        #c0392b;
+      --c-red-lt:     #fdf0ee;
+      --c-amber:      #b45309;
+      --c-amber-lt:   #fef3e2;
+      --c-slate:      #64748b;
+      --c-slate-lt:   #f1f5f9;
+      --c-ink:        #0f172a;
+      --c-ink2:       #334155;
+      --c-ink3:       #64748b;
+      --c-border:     #e2e8f0;
+      --c-border2:    #cbd5e1;
+      --c-white:      #ffffff;
+      --c-bg:         #f0f4f8;
+      --radius:       10px;
+      --radius-lg:    14px;
+      --shadow-xs:    0 1px 2px rgba(0,0,0,.06);
+      --shadow-sm:    0 2px 8px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
+      --shadow-md:    0 6px 24px rgba(0,0,0,.09), 0 2px 8px rgba(0,0,0,.05);
+      --shadow-lg:    0 12px 40px rgba(0,0,0,.12);
+      --font:         -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono:    'SF Mono', 'Fira Code', 'Consolas', monospace;
+      --trans:        all .18s ease;
+    }
+
+    /* ── BASE ── */
+    html { scroll-behavior: smooth; font-size: 15px; }
+    body {
+      font-family: var(--font);
+      background: var(--c-bg);
+      color: var(--c-ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════════════
+       HEADER
+    ══════════════════════════════════════════ */
+    .header {
+      background: var(--c-navy);
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 4px 20px rgba(0,0,0,.35);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .header-logo {
+      width: 34px; height: 34px;
+      background: var(--c-blue);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .header-logo svg {
+      width: 18px; height: 18px;
+      fill: none; stroke: #fff;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .header-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.2px;
+    }
+    .header-name span { color: #60a5fa; }
+    .header-sep {
+      width: 1px; height: 18px;
+      background: rgba(255,255,255,.12);
+      margin: 0 2px;
+    }
+    .header-tag {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.38);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,.5);
+      font-family: var(--font-mono);
+    }
+    .pulse {
+      width: 6px; height: 6px;
+      background: #34d399;
+      border-radius: 50%;
+      animation: blink 2s ease infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity:1; }
+      50% { opacity:.3; }
+    }
+
+    /* ══════════════════════════════════════════
+       BODY LAYOUT
+    ══════════════════════════════════════════ */
+    .body-wrap {
+      display: flex;
+      flex: 1;
+      min-height: calc(100vh - 56px);
+    }
+
+    /* ══════════════════════════════════════════
+       SIDEBAR
+    ══════════════════════════════════════════ */
+    .sidebar {
+      width: 320px;
+      min-width: 320px;
+      background: var(--c-white);
+      border-right: 1px solid var(--c-border);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 56px;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+    }
+    .sidebar-header {
+      padding: 20px 20px 0;
+    }
+    .sidebar-header-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      color: var(--c-ink3);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-header-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--c-border);
+    }
+    .sidebar-body {
+      padding: 0 20px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+      border: 2px dashed var(--c-border2);
+      border-radius: var(--radius-lg);
+      padding: 28px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: var(--trans);
+      position: relative;
+      background: var(--c-slate-lt);
+    }
+    .drop-zone:hover, .drop-zone.drag { border-color: var(--c-blue); background: var(--c-blue-lt); }
+    .drop-zone.ready { border-color: var(--c-green); background: var(--c-green-lt); border-style: solid; }
+    .drop-zone input {
+      position: absolute; inset: 0;
+      opacity: 0; cursor: pointer;
+      width: 100%; height: 100%;
+    }
+    .dz-icon {
+      width: 46px; height: 46px;
+      border-radius: 12px;
+      background: var(--c-navy2);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+      transition: var(--trans);
+    }
+    .drop-zone.ready .dz-icon { background: var(--c-green); }
+    .dz-icon svg {
+      width: 22px; height: 22px;
+      fill: none; stroke: #fff;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .dz-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--c-ink);
+      margin-bottom: 3px;
+    }
+    .dz-sub {
+      font-size: 0.75rem;
+      color: var(--c-ink3);
+    }
+    .file-chip {
+      display: none;
+      margin-top: 10px;
+      align-items: center;
+      gap: 8px;
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      border-radius: 7px;
+      padding: 7px 11px;
+      font-size: 0.75rem;
+      color: #14532d;
+      font-family: var(--font-mono);
+      text-align: left;
+      word-break: break-all;
+    }
+    .file-chip.show { display: flex; }
+
+    /* ── Process button ── */
+    .btn-process {
+      width: 100%;
+      padding: 12px;
+      background: var(--c-navy2);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: var(--trans);
+      box-shadow: 0 2px 10px rgba(17,34,64,.3);
+      letter-spacing: 0.2px;
+    }
+    .btn-process:hover:not(:disabled) {
+      background: var(--c-navy3);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(17,34,64,.4);
+    }
+    .btn-process:active:not(:disabled) { transform: none; }
+    .btn-process:disabled { background: #94a3b8; box-shadow: none; cursor: not-allowed; }
+    .btn-process svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── Error ── */
+    .err-box {
+      display: none;
+      align-items: flex-start;
+      gap: 9px;
+      background: var(--c-red-lt);
+      border: 1px solid #f5c6c2;
+      border-radius: var(--radius);
+      padding: 11px 13px;
+      font-size: 0.78rem;
+      color: var(--c-red);
+      line-height: 1.4;
+    }
+    .err-box.show { display: flex; }
+    .err-box svg { width: 15px; height: 15px; min-width: 15px; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+    /* ── Sidebar info list ── */
+    .info-list { display: flex; flex-direction: column; gap: 2px; }
+    .info-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+    }
+    .info-row:hover { background: var(--c-slate-lt); }
+    .info-num {
+      width: 22px; height: 22px; min-width: 22px;
+      background: var(--c-navy2);
+      color: #fff;
+      border-radius: 6px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .info-row span { color: var(--c-ink2); font-weight: 500; }
+    .info-row b { color: var(--c-ink); }
+
+    /* sidebar divider */
+    .s-divider {
+      height: 1px;
+      background: var(--c-border);
+    }
+
+    /* ══════════════════════════════════════════
+       MAIN CONTENT
+    ══════════════════════════════════════════ */
+    .main {
+      flex: 1;
+      padding: 28px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Welcome ── */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 60px 32px;
+      gap: 0;
+    }
+    .welcome.gone { display: none; }
+    .welcome-icon {
+      width: 72px; height: 72px;
+      background: var(--c-navy2);
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 22px;
+      box-shadow: var(--shadow-md);
+    }
+    .welcome-icon svg {
+      width: 34px; height: 34px;
+      fill: none; stroke: rgba(255,255,255,.85);
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .welcome h2 {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--c-ink);
+      margin-bottom: 10px;
+      letter-spacing: -0.3px;
+    }
+    .welcome p {
+      font-size: 0.88rem;
+      color: var(--c-ink3);
+      max-width: 420px;
+      line-height: 1.65;
+      margin-bottom: 30px;
+    }
+    .flow-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--c-white);
+      border: 1px solid var(--c-border);
+      border-radius: 24px;
+      padding: 7px 16px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--c-ink2);
+      box-shadow: var(--shadow-xs);
+    }
+    .flow-step-n {
+      width: 20px; height: 20px;
+      background: var(--c-navy2);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 0.62rem;
+      font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .flow-arrow {
+      color: var(--c-border2);
+      font-size: 1.1rem;
+      padding: 0 4px;
+    }
+
+    /* ── Loading ── */
+    #loading {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 80px 0;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: 3px solid var(--c-border);
+      border-top-color: var(--c-blue);
+      animation: spin .65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 0.88rem; color: var(--c-ink3); font-family: var(--font-mono); }
+    .loading-sub  { font-size: 0.75rem; color: var(--c-border2); font-family: var(--font-mono); margin-top: -8px; }
+
+    /* ── Results ── */
+    #results { display: none; }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--c-white);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: var(--shadow-xs);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .stat-card.s-red::before   { background: var(--c-red); }
+    .stat-card.s-blue::before  { background: var(--c-blue); }
+    .stat-card.s-green::before { background: var(--c-green); }
+    .stat-card.s-amber::before { background: var(--c-amber); }
+    .stat-icon {
+      width: 40px; height: 40px; min-width: 40px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .stat-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .stat-card.s-red   .stat-icon { background: var(--c-red-lt);   color: var(--c-red);   }
+    .stat-card.s-blue  .stat-icon { background: var(--c-blue-lt);  color: var(--c-blue);  }
+    .stat-card.s-green .stat-icon { background: var(--c-green-lt); color: var(--c-green); }
+    .stat-card.s-amber .stat-icon { background: var(--c-amber-lt); color: var(--c-amber); }
+    .stat-val   { font-size: 1.7rem; font-weight: 800; color: var(--c-ink); line-height: 1; }
+    .stat-label { font-size: 0.7rem; font-weight: 600; color: var(--c-ink3); letter-spacing: .5px; text-transform: uppercase; margin-top: 2px; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar-title {
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: var(--c-ink);
+      letter-spacing: -0.2px;
+    }
+    .export-group { display: flex; gap: 8px; }
+    .btn-export {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-family: var(--font);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: var(--trans);
+      letter-spacing: 0.1px;
+    }
+    .btn-export svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .btn-xl { background: #166534; color: #fff; border-color: #166534; }
+    .btn-xl:hover { background: #14532d; }
+    .btn-pdf { background: var(--c-red); color: #fff; border-color: var(--c-red); }
+    .btn-pdf:hover { background: #a93226; }
+
+    /* Department tabs */
+    .dept-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 8px;
+      background: var(--c-white);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-xs);
+    }
+    .dtab {
+      padding: 5px 14px;
+      border: none;
+      border-radius: 7px;
+      font-family: var(--font);
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--c-ink3);
+      background: transparent;
+      cursor: pointer;
+      transition: var(--trans);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dtab:hover { background: var(--c-slate-lt); color: var(--c-ink); }
+    .dtab.active { background: var(--c-navy2); color: #fff; }
+    .dtab-count {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      opacity: .65;
+    }
+
+    /* Department cards */
+    .dept-card {
+      background: var(--c-white);
+      border: 1px solid var(--c-border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-xs);
+      overflow: hidden;
+      animation: fadeUp .3s ease both;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(8px); }
+      to   { opacity:1; transform: translateY(0); }
+    }
+
+    .dept-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s;
+      border-bottom: 1px solid transparent;
+    }
+    .dept-head:hover { background: #fafbfc; }
+    .dept-card.open .dept-head { border-bottom-color: var(--c-border); }
+    .dept-head-l { display: flex; align-items: center; gap: 12px; }
+    .dept-pill {
+      display: inline-flex;
+      align-items: center;
+      background: var(--c-navy2);
+      color: #fff;
+      border-radius: 7px;
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+    .dept-absent-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--c-red-lt);
+      color: var(--c-red);
+      border: 1px solid #fca5a5;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .dept-chevron {
+      color: var(--c-ink3);
+      font-size: 0.75rem;
+      transition: transform .2s;
+    }
+    .dept-card.open .dept-chevron { transform: rotate(180deg); }
+    .dept-body { display: none; }
+    .dept-card.open .dept-body { display: block; }
+
+    /* Table */
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    thead th {
+      background: #f8fafc;
+      color: var(--c-ink3);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      padding: 10px 20px;
+      text-align: left;
+      border-bottom: 1px solid var(--c-border);
+      white-space: nowrap;
+    }
+    tbody td {
+      padding: 11px 20px;
+      border-bottom: 1px solid #f1f5f9;
+      color: var(--c-ink2);
+      vertical-align: middle;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafbfc; }
+    .td-sno {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--c-border2);
+      width: 40px;
+    }
+    .td-reg {
+      font-family: var(--font-mono);
+      font-size: 0.79rem;
+      color: var(--c-slate);
+      white-space: nowrap;
+    }
+    .td-name { font-weight: 600; color: var(--c-ink); }
+    .year-badge {
+      display: inline-block;
+      font-size: 0.69rem;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: var(--c-blue-lt);
+      color: var(--c-blue);
+      white-space: nowrap;
+      font-family: var(--font-mono);
+    }
+
+    /* ══════════════════════════════════════════
+       FOOTER
+    ══════════════════════════════════════════ */
+    footer {
+      background: var(--c-white);
+      border-top: 1px solid var(--c-border);
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--c-ink3);
+    }
+    footer strong { color: var(--c-ink2); font-weight: 700; }
+
+    /* ══════════════════════════════════════════
+       SCROLLBAR
+    ══════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--c-border2); border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+  <div class="header-brand">
+    <div class="header-logo">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+    </div>
+    <span class="header-name">Exam<span>Sync</span></span>
+    <div class="header-sep"></div>
+    <span class="header-tag">Attendance Management</span>
+  </div>
+  <div class="header-right">
+    <div class="header-pill">
+      <div class="pulse"></div>
+      System Ready
+    </div>
+  </div>
+</header>
+
+<!-- ═══ BODY ═══ -->
+<div class="body-wrap">
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-header-title">Upload File</div>
+    </div>
+    <div class="sidebar-body">
+
+      <form id="uploadForm">
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" name="file" accept=".docx"/>
+          <div class="dz-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div class="dz-title" id="dzTitle">Drop attendance file here</div>
+          <div class="dz-sub">.docx format only</div>
+          <div class="file-chip" id="fileChip">
+            <svg style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span id="fileChipName"></span>
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        <button type="submit" class="btn-process" id="processBtn" disabled>
+          <svg viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v4l3 3"/></svg>
+          Process Attendance File
+        </button>
+      </form>
+
+      <div class="err-box" id="errBox">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="errText"></span>
+      </div>
+
+      <div class="s-divider"></div>
+
+      <div>
+        <div class="sidebar-header-title" style="font-size:.68rem;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--c-ink3);margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          How it works
+          <span style="flex:1;height:1px;background:var(--c-border)"></span>
+        </div>
+        <div class="info-list">
+          <div class="info-row"><div class="info-num">1</div><span>Upload the hall-wise <b>.docx</b> attendance file</span></div>
+          <div class="info-row"><div class="info-num">2</div><span>System detects <b>AB</b> marks automatically</span></div>
+          <div class="info-row"><div class="info-num">3</div><span>Reg no is parsed to find <b>dept &amp; year</b></span></div>
+          <div class="info-row"><div class="info-num">4</div><span>Export <b>Excel</b> or <b>PDF</b> for ERP entry</span></div>
+        </div>
+      </div>
+
+      <div class="s-divider"></div>
+
+      <div>
+        <div class="sidebar-header-title" style="font-size:.68rem;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--c-ink3);margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          Absent Markers Detected
+          <span style="flex:1;height:1px;background:var(--c-border)"></span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <span style="font-family:var(--font-mono);font-size:.73rem;background:var(--c-red-lt);color:var(--c-red);border:1px solid #fca5a5;border-radius:6px;padding:3px 10px">AB</span>
+          <span style="font-family:var(--font-mono);font-size:.73rem;background:var(--c-red-lt);color:var(--c-red);border:1px solid #fca5a5;border-radius:6px;padding:3px 10px">A</span>
+          <span style="font-family:var(--font-mono);font-size:.73rem;background:var(--c-red-lt);color:var(--c-red);border:1px solid #fca5a5;border-radius:6px;padding:3px 10px">ABSENT</span>
+          <span style="font-family:var(--font-mono);font-size:.73rem;background:var(--c-red-lt);color:var(--c-red);border:1px solid #fca5a5;border-radius:6px;padding:3px 10px">✖</span>
+          <span style="font-family:var(--font-mono);font-size:.73rem;background:var(--c-red-lt);color:var(--c-red);border:1px solid #fca5a5;border-radius:6px;padding:3px 10px">X</span>
+        </div>
+      </div>
+
+    </div>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <main class="main">
+
+    <!-- Welcome -->
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      </div>
+      <h2>Hall-wise to Department-wise</h2>
+      <p>Upload your exam attendance Word file. The system automatically extracts absentees and groups them by department — ready for ERP entry in seconds.</p>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="flow-step-n">1</span>Upload .docx</div>
+        <span class="flow-arrow">›</span>
+        <div class="flow-step"><span class="flow-step-n">2</span>Auto Extract</div>
+        <span class="flow-arrow">›</span>
+        <div class="flow-step"><span class="flow-step-n">3</span>View by Dept</div>
+        <span class="flow-arrow">›</span>
+        <div class="flow-step"><span class="flow-step-n">4</span>Export Report</div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Processing attendance file…</div>
+      <div class="loading-sub">Extracting absentees · Mapping departments</div>
+    </div>
+
+    <!-- Results -->
+    <div id="results">
+
+      <div class="stats-row" id="statsRow"></div>
+
+      <div class="toolbar">
+        <div class="toolbar-title">Department-wise Absentees</div>
+        <div class="export-group">
+          <button onclick="triggerDownload('/download/excel', 'btnExcel')" class="btn-export btn-xl" id="btnExcel">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download Excel
+          </button>
+          <button onclick="triggerDownload('/download/pdf', 'btnPdf')" class="btn-export btn-pdf" id="btnPdf">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="dept-tabs" id="deptTabs"></div>
+      <div id="deptCards"></div>
+
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div><strong>ExamSync</strong> &nbsp;·&nbsp; Exam Attendance Automation Tool</div>
+  <div>For Internal Faculty Use Only</div>
+</footer>
+
+<script>
+  const fileInput  = document.getElementById("fileInput");
+  const processBtn = document.getElementById("processBtn");
+  const fileChip   = document.getElementById("fileChip");
+  const fileChipN  = document.getElementById("fileChipName");
+  const dropZone   = document.getElementById("dropZone");
+  const dzTitle    = document.getElementById("dzTitle");
+  const loading    = document.getElementById("loading");
+  const results    = document.getElementById("results");
+  const errBox     = document.getElementById("errBox");
+  const errText    = document.getElementById("errText");
+  const welcome    = document.getElementById("welcome");
+  const statsRow   = document.getElementById("statsRow");
+  const deptCards  = document.getElementById("deptCards");
+  const deptTabs   = document.getElementById("deptTabs");
+
+  /* ── drag & drop ── */
+  dropZone.addEventListener("dragover",  e => { e.preventDefault(); dropZone.classList.add("drag"); });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag"));
+  dropZone.addEventListener("drop", e => {
+    e.preventDefault(); dropZone.classList.remove("drag");
+    const f = e.dataTransfer.files[0];
+    if (f) { fileInput.files = e.dataTransfer.files; onFile(f); }
+  });
+  fileInput.addEventListener("change", () => { if (fileInput.files[0]) onFile(fileInput.files[0]); });
+
+  function onFile(f) {
+    dropZone.classList.add("ready");
+    dzTitle.textContent = "File selected";
+    fileChipN.textContent = f.name + " (" + (f.size / 1024).toFixed(1) + " KB)";
+    fileChip.classList.add("show");
+    processBtn.disabled = false;
+  }
+
+  /* ── form submit ── */
+  document.getElementById("uploadForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    errBox.classList.remove("show");
+    welcome.classList.add("gone");
+    results.style.display = "none";
+    loading.style.display = "flex";
+    processBtn.disabled = true;
+
+    try {
+      const res  = await fetch("/upload", { method: "POST", body: new FormData(e.target) });
+      const data = await res.json();
+      loading.style.display = "none";
+      processBtn.disabled = false;
+
+      if (!res.ok || data.error) {
+        errText.textContent = data.error || "Unknown error occurred.";
+        errBox.classList.add("show");
+        welcome.classList.remove("gone");
+        return;
+      }
+      render(data);
+    } catch (err) {
+      loading.style.display = "none";
+      processBtn.disabled = false;
+      errText.textContent = "Could not connect: " + err.message;
+      errBox.classList.add("show");
+      welcome.classList.remove("gone");
+    }
+  });
+
+  /* ── render results ── */
+  function render(data) {
+    const depts = [...new Set(data.records.map(r => r.Department))].sort();
+    const years = [...new Set(data.records.map(r => r.Year))];
+
+    /* stats */
+    statsRow.innerHTML = `
+      <div class="stat-card s-red">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <div><div class="stat-val">${data.total}</div><div class="stat-label">Total Absent</div></div>
+      </div>
+      <div class="stat-card s-blue">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        </div>
+        <div><div class="stat-val">${depts.length}</div><div class="stat-label">Departments</div></div>
+      </div>
+      <div class="stat-card s-green">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div><div class="stat-val">${data.tables}</div><div class="stat-label">Hall Tables</div></div>
+      </div>
+      <div class="stat-card s-amber">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+        </div>
+        <div><div class="stat-val">${years.length}</div><div class="stat-label">Year Groups</div></div>
+      </div>`;
+
+    /* dept filter tabs */
+    deptTabs.innerHTML =
+      `<button class="dtab active" data-dept="ALL">All Departments</button>` +
+      depts.map(d => {
+        const n = data.records.filter(r => r.Department === d).length;
+        return `<button class="dtab" data-dept="${d}">${d}<span class="dtab-count">${n}</span></button>`;
+      }).join("");
+
+    deptTabs.querySelectorAll(".dtab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        deptTabs.querySelectorAll(".dtab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const dept = btn.dataset.dept;
+        document.querySelectorAll(".dept-card").forEach(c => {
+          c.style.display = (dept === "ALL" || c.dataset.dept === dept) ? "" : "none";
+        });
+      });
+    });
+
+    /* group records */
+    deptCards.innerHTML = "";
+    const grouped = {};
+    data.records.forEach(r => {
+      if (!grouped[r.Department]) grouped[r.Department] = [];
+      grouped[r.Department].push(r);
+    });
+
+    Object.keys(grouped).sort().forEach((dept, i) => {
+      const rows = grouped[dept];
+      const card = document.createElement("div");
+      card.className = "dept-card open";
+      card.dataset.dept = dept;
+      card.style.animationDelay = (i * 50) + "ms";
+      card.innerHTML = `
+        <div class="dept-head" onclick="this.closest('.dept-card').classList.toggle('open')">
+          <div class="dept-head-l">
+            <span class="dept-pill">${dept}</span>
+            <span class="dept-absent-badge">
+              <svg style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              ${rows.length} absent
+            </span>
+          </div>
+          <span class="dept-chevron">▼</span>
+        </div>
+        <div class="dept-body">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Register No</th>
+                  <th>Student Name</th>
+                  <th>Year</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows.map((r, j) => `
+                  <tr>
+                    <td class="td-sno">${j + 1}</td>
+                    <td class="td-reg">${r["Reg No"]}</td>
+                    <td class="td-name">${r.Name}</td>
+                    <td><span class="year-badge">${r.Year}</span></td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+      deptCards.appendChild(card);
+    });
+
+    results.style.display = "block";
+    results.scrollIntoView({ behavior: "smooth" });
+  }
+
+  /* ── Download — saves directly to Windows Downloads folder ── */
+  async function triggerDownload(endpoint, btnId) {
+    const btn = document.getElementById(btnId);
+    const origHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = "⏳ Saving...";
+
+    try {
+      const res  = await fetch(endpoint);
+      const data = await res.json();
+
+      if (data.error) {
+        showToast("❌ " + data.error, "error");
+        return;
+      }
+
+      // Show success toast with exact file path
+      showToast("✅ Saved to: " + data.saved_to, "success");
+
+    } catch (err) {
+      showToast("❌ Failed: " + err.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origHTML;
+    }
+  }
+
+  /* ── Toast notification ── */
+  function showToast(message, type) {
+    // Remove existing toast
+    const old = document.getElementById("toast");
+    if (old) old.remove();
+
+    const toast = document.createElement("div");
+    toast.id = "toast";
+    toast.textContent = message;
+    Object.assign(toast.style, {
+      position:     "fixed",
+      bottom:       "28px",
+      left:         "50%",
+      transform:    "translateX(-50%)",
+      background:   type === "success" ? "#0d7a55" : "#c0392b",
+      color:        "#fff",
+      padding:      "13px 24px",
+      borderRadius: "10px",
+      fontSize:     "0.85rem",
+      fontWeight:   "600",
+      boxShadow:    "0 6px 24px rgba(0,0,0,0.25)",
+      zIndex:       "9999",
+      maxWidth:     "80vw",
+      wordBreak:    "break-all",
+      textAlign:    "center",
+      transition:   "opacity .4s",
+    });
+    document.body.appendChild(toast);
+
+    // Auto-dismiss after 6 seconds
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 400);
+    }, 6000);
+  }
+</script>
+</body>
+</html>
