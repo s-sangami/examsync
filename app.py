@@ -18,6 +18,7 @@ from flask import Flask, render_template, request, send_file, jsonify
 from docx import Document
 import pandas as pd
 import re
+import datetime
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
@@ -36,13 +37,10 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 # ▼▼▼  EDIT THIS SECTION ONLY  ▼▼▼
 # ==============================================================================
 
-YEAR_MAP = {
-    "22": "4th Year",
-    "23": "3rd Year",
-    "24": "2nd Year",
-    "25": "1st Year",
-}
-
+# Year of study is computed from the admission-year code in the register number
+# (see year_label_for), so there is no per-year table to maintain.
+# Length of the dept code that follows the admission year, by admission year.
+# Admission years not listed here default to 3 characters.
 YEAR_SLICE = {
     "22": 3,
     "23": 4,
@@ -103,11 +101,38 @@ DEPT_MAP = {
 # ==============================================================================
 
 
-def parse_reg_no(reg_no):
+ACADEMIC_YEAR_START_MONTH = 6   # academic year begins in June
+MAX_YEAR_OF_STUDY         = 4   # UG programmes; anything beyond is shown as a batch
+
+
+def current_academic_year_start(today=None):
+    """Calendar year in which the current academic year began (June start)."""
+    today = today or datetime.date.today()
+    return today.year if today.month >= ACADEMIC_YEAR_START_MONTH else today.year - 1
+
+
+def year_label_for(yr, today=None):
+    """Year-of-study label from the 2-digit admission-year code.
+
+    Assumes admission in June of 20<yr> with no gap years, so in the academic
+    year starting in Y the batch is in year (Y - 20yy + 1). Fallback when the
+    code is non-numeric or the result is outside 1..MAX_YEAR_OF_STUDY (arrears
+    batches, future codes): "Batch 20yy" / "Year(yr)" instead of a wrong year.
+    """
+    if not (len(yr) == 2 and yr.isdigit()):
+        return f"Year({yr})"
+    n = current_academic_year_start(today) - (2000 + int(yr)) + 1
+    if 1 <= n <= MAX_YEAR_OF_STUDY:
+        suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+        return f"{n}{suffix} Year"
+    return f"Batch 20{yr}"
+
+
+def parse_reg_no(reg_no, today=None):
     reg_no = reg_no.strip()
     try:
         yr         = reg_no[4:6]
-        year_label = YEAR_MAP.get(yr, f"Year({yr})")
+        year_label = year_label_for(yr, today)
         suffix     = reg_no[6:]
         n          = YEAR_SLICE.get(yr, 3)
         code       = suffix[0:n].upper()
