@@ -71,6 +71,29 @@ instead of a guessed year. PG programmes use the same 1–4 scale, so a finished
 
 ---
 
+## Screenshots
+
+All screenshots use the synthetic file `tests/fixtures/synthetic_attendance.docx`
+(fake names and register numbers).
+
+**Upload**
+
+![Upload screen](docs/screenshots/01-upload.png)
+
+**Processing**
+
+![Processing screen](docs/screenshots/02-processing.png)
+
+**Department-wise results**
+
+![Department-wise results](docs/screenshots/03-results.png)
+
+**PDF report (first page)**
+
+![PDF report, first page](docs/screenshots/04-pdf-report.png)
+
+---
+
 ## Setup (run from source)
 
 Python 3.9+ on Windows.
